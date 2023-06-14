@@ -16,10 +16,10 @@ yum install -y python3-inotify
 
 ### 2. Deploy the Script
 
-Deploy the `logs2eca` script to a suitable directory, such as `/usr/local`. Here's an example using the `install` command:
+Deploy the `logs2eca` script to a suitable directory, such as `/usr/local/bin`. Here's an example using the `install` command:
 
 ```bash
-install -m 755 -o root -g root /path/to/logs2eca /usr/local/logs2eca
+install -m 755 -o root -g root /path/to/logs2eca /usr/local/bin/logs2eca
 ```
 
 Make sure to replace `/path/to/logs2eca` with the actual path to the `logs2eca` script.
@@ -29,7 +29,7 @@ Make sure to replace `/path/to/logs2eca` with the actual path to the `logs2eca` 
 The systemd service template facilitates the script's execution as a persistent service. Modify the `ExecStart` path in the template to match the actual path of the `logs2eca` script, then place the service template in the systemd system directory (`/etc/systemd/system/`):
 
 ```bash
-sed "s|/usr/bin/logs2eca|/usr/local/logs2eca|g" /path/to/logs2eca@.service > /etc/systemd/system/logs2eca@.service
+sed "s|/usr/bin/logs2eca|/usr/local/bin/logs2eca|g" /path/to/logs2eca@.service > /etc/systemd/system/logs2eca@.service
 ```
 
 Be sure to replace `/path/to/logs2eca@.service` with the correct path to the service template file.
