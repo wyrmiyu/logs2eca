@@ -124,6 +124,12 @@ class EventHandler(pyinotify.ProcessEvent):
                 "will wait for it to be created.")
             self.file = None
             self.current_position = 0
+   
+        # The check whether Pattern is a string or a re.compile object.
+        if(isinstance(self.pattern, Pattern)):
+            self.pattern_match = lambda line: self.pattern.search(line)
+        else:
+            self.pattern_match = lambda line: self.pattern in line
 
     def process_IN_MODIFY(self, event):
         """
@@ -138,18 +144,15 @@ class EventHandler(pyinotify.ProcessEvent):
                 for line in self.file:
                     if(self.id in line):
                         continue
-                    if(isinstance(self.pattern, Pattern)):
-                        if(self.pattern.search(line)):
-                            print(f"{self.id} Event: {line.strip()}")
-                            print(f"{self.id} Matching the regex pattern: "
-                                f"{self.pattern.pattern}")
-                            self.run_command()
-                    else:
-                        if(self.pattern in line):
-                            print(f"{self.id} Event: {line.strip()}")
-                            print(f"{self.id} Matching the pattern: "
-                                    f"{self.pattern}")
-                            self.run_command()
+                    if(self.pattern_match(line)):
+                        print(f"{self.id} Event: {line.strip()}")
+                        if isinstance(self.pattern, Pattern):
+                            info = (f"{self.id} Matching the regex pattern: "
+                                    f"{self.pattern.pattern}")
+                            print(info)
+                        else:
+                            print(f"{self.id} Matching the pattern: {self.pattern}")
+                        self.run_command()
                 self.current_position = self.file.tell()
 
     def process_IN_CREATE(self, event):
