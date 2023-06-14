@@ -10,8 +10,6 @@ import uuid
 from pathlib import Path
 from typing import Pattern
 
-handler = None  # declare handler as a global variable
-
 def parse_args():
     """
     This function parses the command line arguments. It will return a
@@ -124,7 +122,7 @@ class EventHandler(pyinotify.ProcessEvent):
                 "will wait for it to be created.")
             self.file = None
             self.current_position = 0
-   
+
         # The check whether Pattern is a string or a re.compile object.
         if(isinstance(self.pattern, Pattern)):
             self.pattern_match = lambda line: self.pattern.search(line)
@@ -211,46 +209,36 @@ class EventHandler(pyinotify.ProcessEvent):
         if(self.file):
             self.file.close()
 
-def handle_sighup(signal, frame):
-    """
-    Handles SIGHUP signals. This method will close the current file handle
-    (if any), open a new one, and reset the current position to 0.
-    """
-    global handler  # specify that we are using the global handler variable
-    print("{self.id} Received SIGHUP")
-    if(handler.file):
-        handler.file.close()
-    handler.file = open(handler.logfile, 'r')
-    handler.current_position = 0
+class LogFileMonitor:
+    def __init__(self):
+        self.handler = None
 
-def main():
-    """
-    The main method. This method will parse the command line arguments, set
-    up the signal handler for SIGHUP, start the pyinotify.WatchManager and
-    the pyinotify.Notifier.
-    The WatchManager will watch the directory containing the log file for
-    changes, and the Notifier will call the EventHandler methods when
-    changes are detected.
-    """
+    def handle_sighup(self, signal, frame):
+        print("[info] Received SIGHUP")
+        if self.handler and self.handler.file:
+            self.handler.file.close()
+            self.handler.file = open(self.handler.logfile, 'r')
+            self.handler.current_position = 0
 
-    global handler  # specify that we are using the global handler variable
-    args = parse_args()
-    signal.signal(signal.SIGHUP, handle_sighup)
-    pattern = args.pattern.strip()
-    re_indicators = ('/', '|', '%')
-    for indicator in re_indicators:
-        if(pattern.startswith(indicator) and pattern.endswith(indicator)):
-            pattern = re.compile(pattern[1:-1])
-            break
+    def run(self):
+        args = parse_args()
+        signal.signal(signal.SIGHUP, self.handle_sighup)
+        pattern = args.pattern.strip()
+        re_indicators = ('/', '|', '%')
+        for indicator in re_indicators:
+            if(pattern.startswith(indicator) and pattern.endswith(indicator)):
+                pattern = re.compile(pattern[1:-1])
+                break
 
-    wm = pyinotify.WatchManager()
-    handler = EventHandler( logfile=args.logfile.strip(),
-                            pattern=pattern,
-                            command=args.command.strip(),
-                            wait=args.wait)
-    notifier = pyinotify.Notifier(wm, handler)
-    wm.add_watch(str(Path(args.logfile).parent), pyinotify.ALL_EVENTS)
-    notifier.loop()
+        wm = pyinotify.WatchManager()
+        self.handler = EventHandler( logfile=args.logfile.strip(),
+                                pattern=pattern,
+                                command=args.command.strip(),
+                                wait=args.wait)
+        notifier = pyinotify.Notifier(wm, self.handler)
+        wm.add_watch(str(Path(args.logfile).parent), pyinotify.ALL_EVENTS)
+        notifier.loop()
 
 if(__name__ == "__main__"):
-    main()
+    monitor = LogFileMonitor()
+    monitor.run()
