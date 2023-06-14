@@ -1,6 +1,7 @@
 # logs2eca
 
 ## Table of Contents
+
 - [logs2eca](#logs2eca)
   - [Table of Contents](#table-of-contents)
   - [Introduction](#introduction)
@@ -9,9 +10,11 @@
   - [Additional Information](#additional-information)
 
 ## Introduction
+
 `logs2eca` is a Python-based script designed to actively monitor specified log files for a given error pattern. When the error pattern is identified, the script executes a predefined command and waits for a specified time period before resuming its monitoring activity. This tool is currently developed for RHEL 8 environments with the shipped Python 3.6. Due to this, the script relies on a deprecated version of pyinotify. In future, the plan is to create a more generic version with a modern inotify implementation, but this is not the primary focus at the moment.
 
 ## Requirements
+
 - RHEL 8 environment
 - Python 3.6 (default with RHEL 8)
 - python3-inotify package
@@ -23,6 +26,7 @@ sudo yum install python3-inotify
 ```
 
 ## Usage
+
 The script accepts the following four arguments which can be provided either as command-line arguments or as environment variables:
 
 - Log file to monitor (`--logfile`)
@@ -39,6 +43,7 @@ logs2eca --logfile /var/log/sssd/sssd_implicit_files.log --pattern "/timed out b
 If the error pattern is surrounded by `/`, `|`, or `%`, it will be interpreted as a regex pattern.
 
 ## Additional Information
+
 Upon start, `logs2eca` begins to monitor new log entries from the specified log file. If a line matches the provided error pattern, the script executes the provided command, waits for the optional wait time, and then continues to monitor the log file.
 
 When the script detects a log rotation (listening to the SIGHUP signal), it continues the loop, reopening the file in the next loop iteration.

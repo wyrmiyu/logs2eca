@@ -11,6 +11,7 @@ Logs2eca utilizes the `pyinotify` module to interface with the inotify API of th
 ```bash
 yum install -y python3-inotify
 ```
+
 >Note: Logs2eca is designed to work with the `python3-inotify` module from [this repository](https://github.com/seb-m/pyinotify), which aligns with the version included with RHEL 8.
 
 ### 2. Deploy the Script
@@ -20,6 +21,7 @@ Deploy the `logs2eca` script to a suitable directory, such as `/usr/local`. Here
 ```bash
 install -m 755 -o root -g root /path/to/logs2eca /usr/local/logs2eca
 ```
+
 Make sure to replace `/path/to/logs2eca` with the actual path to the `logs2eca` script.
 
 ### 3. Systemd Service Template Setup
@@ -29,6 +31,7 @@ The systemd service template facilitates the script's execution as a persistent 
 ```bash
 sed "s|/usr/bin/logs2eca|/usr/local/logs2eca|g" /path/to/logs2eca@.service > /etc/systemd/system/logs2eca@.service
 ```
+
 Be sure to replace `/path/to/logs2eca@.service` with the correct path to the service template file.
 
 ### 4. Environment File Setup
@@ -44,6 +47,7 @@ Transfer the environment file template into this directory:
 ```bash
 install -m 644 -o root -g root /path/to/logs2eca_env_template /etc/logs2eca/logs2eca_env_template
 ```
+
 As before, replace `/path/to/logs2eca_env_template` with the actual path to the file.
 
 Each instance of the service relies on an environment file for its configuration. The file should be named after the service instance with a `.monitor` extension (for example, `sssd.monitor` for the `sssd` service instance). Create an instance of the service by copying the template file and customizing it with the correct environment variables:
@@ -52,6 +56,7 @@ Each instance of the service relies on an environment file for its configuration
 cp /etc/logs2eca/logs2eca_env_template /etc/logs2eca/my_instance.monitor
 vi /etc/logs2eca/my_instance.monitor
 ```
+
 Replace `my_instance` with the desired service instance name.
 
 In the environment file, you are required to specify the following variables:
@@ -71,23 +76,25 @@ After you've tailored the environment file, enable
 ```bash
 systemctl enable --now logs2eca@my_instance.service
 ```
+
 Replace `my_instance` with the desired service instance name.
 
 ## Automatic Installation using `install.sh`
 
-If you'd like to streamline the installation process, you can utilize the `install.sh` script included in the package. It automatically performs the tasks outlined in the manual installation guide. 
+If you'd like to streamline the installation process, you can utilize the `install.sh` script included in the package. It automatically performs the tasks outlined in the manual installation guide.
 
 1. Provide executable permissions to the script:
 
-```bash
-chmod +x /path/to/install.sh
-```
+   ```bash
+   chmod +x /path/to/install.sh
+   ```
 
 2. Run the script:
 
-```bash
-/path/to/install.sh
-```
+   ```bash
+   /path/to/install.sh
+   ```
+
 Remember to replace `/path/to/install.sh` with the actual path to the script.
 
 Note that the `install.sh` script does not create or configure the environment file for service instances. You'll still need to manually configure the environment files as outlined in the section 4 of the manual installation guide.

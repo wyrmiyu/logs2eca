@@ -12,7 +12,7 @@ The script consists of multiple components that work together to enable the desi
 
 ### The main function
 
-The main function parses the command-line arguments, sets up the signal handler for SIGHUP, and starts the pyinotify.WatchManager and the pyinotify.Notifier. The WatchManager watches the directory containing the log file for changes, and the Notifier calls the EventHandler methods when changes are detected.
+The main function parses the command-line arguments, sets up the signal handler for SIGHUP, and starts the pyinotdify.WatchManager and the pyinotify.Notifier. The WatchManager watches the directory containing the log file for changes, and the Notifier calls the EventHandler methods when changes are detected.
 
 ### Command-line Argument Parsing
 
@@ -35,13 +35,19 @@ The script also responds to SIGHUP signals. This is particularly important to ha
 The design of `logs2eca` leverages the event-condition-action principle to provide a robust and efficient mechanism for real-time log file monitoring and error handling.
 
 ## Inputs
+
 The script takes in four arguments that can also be provided as environment variables:
+
 1. **Log file to monitor** (`--logfile`, `-l`): The file path of the log file to monitor. Can be provided via the environment variable `LOGS2ECA_LOG_FILE`.
+
 2. **Error pattern to look for** (`--pattern`, `-p`): The error pattern to search for in the log file. If the pattern is surrounded by `/`, `|`, or `%`, it's treated as a regular expression. This can be provided via the environment variable `LOGS2ECA_EVENT_PATTERN`.
+
 3. **Command to execute** (`--command`, `-c`): The command to run when the error pattern is detected. This can be provided via the environment variable `LOGS2ECA_COMMAND`.
+
 4. **Wait time** (`--wait`, `-w`): The optional time in seconds to wait after executing the command before resuming the monitoring. Defaults to 3 seconds if not provided. This can be provided via the environment variable `LOGS2ECA_WAIT`.
 
 ## Operation
+
 The script uses the inotify API of the Linux kernel, interfacing through the pyinotify Python module, to monitor changes in the log file. This allows for efficient file change detection without continuous polling.
 
 When the script starts, it parses the command-line arguments with the `parse_args` function. It uses the argparse module for parsing command-line arguments and generating help text.
@@ -51,6 +57,7 @@ The script uses the `pyinotify.ProcessEvent` class to handle filesystem events. 
 The `EventHandler` class is a subclass of `pyinotify.ProcessEvent`. It adds custom behavior to the event handling methods of the parent class, such as looking for the error pattern in modified lines and executing the command when the pattern is found.
 
 ## Handling Filesystem Events
+
 The `EventHandler` class implements the following methods to handle filesystem events:
 
 1. `process_IN_MODIFY`: This method reads the log file from the last known position to the end of the file whenever a file modification event is detected. If the error pattern is found in any line, it calls the `run_command` method.
