@@ -14,6 +14,7 @@
 ## Requirements
 - RHEL 8 environment
 - Python 3.6 (default with RHEL 8)
+- python3-inotify package
 
 `logs2eca` relies on the pyinotify module to interface with the inotify API of the Linux kernel. This functionality is provided by the `python3-inotify` package in RHEL 8. Install it using the following command:
 
