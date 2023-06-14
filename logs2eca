@@ -10,6 +10,9 @@ import uuid
 from pathlib import Path
 from typing import Pattern
 
+# Constants
+RE_INDICATORS = ('/', '|', '%')
+
 def parse_args():
     """
     This function parses the command line arguments. It will return a
@@ -224,8 +227,7 @@ class LogFileMonitor:
         args = parse_args()
         signal.signal(signal.SIGHUP, self.handle_sighup)
         pattern = args.pattern.strip()
-        re_indicators = ('/', '|', '%')
-        for indicator in re_indicators:
+        for indicator in RE_INDICATORS:
             if(pattern.startswith(indicator) and pattern.endswith(indicator)):
                 pattern = re.compile(pattern[1:-1])
                 break
