@@ -185,11 +185,19 @@ class EventHandler(pyinotify.ProcessEvent):
 
     def run_command(self):
         """
-        This method is called when the EventHandler object is destroyed.
-        It will close the current file handle (if any).
+        This method will run the command specified by the user. It will print
+        the command to stdout, and then run it using the subprocess module.
+        It will then sleep for the number of seconds specified by the user.
         """
         print(f"{self.id} Running command: '{self.command}'")
-        subprocess.call(self.command, shell=True)
+        result = subprocess.run(self.command, shell=True, capture_output=True, text=True)
+
+        # Print the output of the command
+        if result.stdout:
+            print(f"Command stdout: {result.stdout}")
+        if result.stderr:
+            print(f"Command stderr: {result.stderr}", file=sys.stderr)
+
         time.sleep(self.wait)
 
     def __del__(self):
