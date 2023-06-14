@@ -33,7 +33,6 @@ def parse_args():
     help = ('The log file to monitor for events. Can be omitted, if '
             'provided with the environment variable: LOGS2ECA_LOG_FILE')
     required.add_argument('--logfile', '-l',
-                            required=True,
                             help=help,
                             dest='logfile',
                             metavar='FILE',
@@ -42,7 +41,6 @@ def parse_args():
     help = ('The pattern to match in the log file. Can be omitted, if '
             'provided with the environment variable: LOGS2ECA_EVENT_PATTERN')
     required.add_argument('--pattern', '-p',
-                            required=True,
                             help=help,
                             dest='pattern',
                             metavar='STRING|REGEX',
@@ -51,7 +49,6 @@ def parse_args():
     help = ('The command to run when an event is detected. Can be omitted, if '
             'provided with the environment variable: LOGS2ECA_COMMAND')
     required.add_argument('--command', '-c',
-                            required=True,
                             help=help,
                             dest='command',
                             metavar='CMD',
@@ -70,7 +67,20 @@ def parse_args():
                             help='Show this help message and exit',
                             action='help',
                             default=argparse.SUPPRESS)
-    return arg_parser.parse_args()
+    args = arg_parser.parse_args()
+    if(not args.logfile):
+        print('[error] No logfile specified')
+        arg_parser.print_help()
+        exit(1)
+    if(not args.pattern):
+        print('[error] No pattern specified')
+        arg_parser.print_help()
+        exit(1)
+    if(not args.command):
+        print('[error] No command specified')
+        arg_parser.print_help()
+        exit(1)
+    return args
 
 class EventHandler(pyinotify.ProcessEvent):
     """
