@@ -1,0 +1,14 @@
+# /etc/systemd/system/logs2eca@.service
+[Unit]
+Description=Monitor a log file for events and run a command when a pattern is detected.
+# Add any dependencies here, for example:
+# After=network.target
+
+[Service]
+Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=/etc/logs2eca/%i.monitor
+ExecStart=/usr/bin/logs2eca
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

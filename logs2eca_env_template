@@ -1,0 +1,40 @@
+### TEMPLATE for logs2eca monitor systemd service environment file
+#
+# The instantiation of this file should be placed in the following directory:
+#   /etc/logs2eca
+#
+# The file name should correspond to the instance name of the logs2eca@.service 
+# (systemd service template) with a .monitor extension.
+#
+# For example, for logs2eca@sssd.service, the full path of the file would be:
+#   /etc/logs2eca/sssd.monitor
+
+### Environment variables
+#
+# Mandatory: LOGS2ECA_LOG_FILE
+# The full path of the log file to monitor.
+#
+# Example: /var/log/sssd/sssd_implicit_files.log
+#
+LOGS2ECA_LOG_FILE=
+
+# Mandatory: LOGS2ECA_EVENT_PATTERN
+# Pattern to match. It can be a string or a regular expression. If it is a
+# string, it can be a substring of a line or a word in a line. Regular
+# expressions must be enclosed in any of the following characters: /, |, %
+#
+# Example with regex: LOGS2ECA_EVENT_PATTERN=/timed out before identification/
+#
+LOGS2ECA_EVENT_PATTERN=
+
+# Mandatory: LOGS2ECA_COMMAND
+# The command to execute when the pattern is matched. It can be any command and
+# it can include arguments and shell redirections.
+#
+LOGS2ECA_COMMAND=
+
+# Optional: LOGS2ECA_WAIT
+# The number of seconds to wait before resuming monitoring the log file after an event has been detected.
+# Default: 3
+#
+#LOGS2ECA_WAIT=3
