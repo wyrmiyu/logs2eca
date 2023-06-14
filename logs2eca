@@ -16,7 +16,7 @@ RE_INDICATORS = ('/', '|', '%')
 def parse_args():
     """
     This function parses the command line arguments. It will return a
-    argparse.Namespace object, which is a simple object that has attributes
+    argparse.Namespace object, which has attributes
     that correspond to the command line arguments.
     returns: logfile, pattern, command, wait
     """
@@ -32,56 +32,44 @@ def parse_args():
                                         add_help=False)
     required = arg_parser.add_argument_group('Required arguments')
     optional = arg_parser.add_argument_group('Optional arguments')
-    help = ('The log file to monitor for events. Can be omitted, if '
-            'provided with the environment variable: LOGS2ECA_LOG_FILE')
-    required.add_argument('--logfile', '-l',
-                            help=help,
-                            dest='logfile',
-                            metavar='FILE',
-                            type=str,
-                            default=os.getenv('LOGS2ECA_LOG_FILE', ''))
-    help = ('The pattern to match in the log file. Can be omitted, if '
-            'provided with the environment variable: LOGS2ECA_EVENT_PATTERN')
-    required.add_argument('--pattern', '-p',
-                            help=help,
-                            dest='pattern',
-                            metavar='STRING|REGEX',
-                            type=str,
-                            default=os.getenv('LOGS2ECA_EVENT_PATTERN', ''))
-    help = ('The command to run when an event is detected. Can be omitted, if '
-            'provided with the environment variable: LOGS2ECA_COMMAND')
-    required.add_argument('--command', '-c',
-                            help=help,
-                            dest='command',
-                            metavar='CMD',
-                            type=str,
-                            default=os.getenv('LOGS2ECA_COMMAND', ''))
-    help = ('The number of seconds to wait before resuming monitoring the log '
-            'file after an event has been detected. Defaults to 3. '
-            'Can also be provided with the environment variable: LOGS2ECA_WAIT')
-    optional.add_argument('--wait', '-w',
-                            help=help,
-                            dest='wait',
-                            metavar='int',
-                            type=int,
-                            default=os.getenv('LOGS2ECA_WAIT', 3))
+
+    help_text = {
+        'logfile': 'The log file to monitor for events',
+        'pattern': 'The pattern to match in the log file',
+        'command': 'The command to run when an event is detected',
+        'wait': 'The number of seconds to wait before resuming monitoring the log file after an event has been detected. Defaults to 3'
+    }
+
+    env_vars = {
+        'logfile': 'LOGS2ECA_LOG_FILE',
+        'pattern': 'LOGS2ECA_EVENT_PATTERN',
+        'command': 'LOGS2ECA_COMMAND',
+        'wait': 'LOGS2ECA_WAIT'
+    }
+
+    for arg, env_var in env_vars.items():
+        required_val = required if arg in ['logfile', 'pattern', 'command'] else optional
+        default_val = os.getenv(env_vars[arg]) if os.getenv(env_vars[arg]) else None if arg in ['logfile', 'pattern', 'command'] else 3
+
+        required_val.add_argument('--' + arg, '-'+ arg[0],
+                            help= f'{help_text[arg]}. Can be omitted if provided with the environment variable: {env_vars[arg]}',
+                            dest=arg,
+                            metavar='FILE' if arg == 'logfile' else 'STRING|REGEX' if arg == 'pattern' else 'CMD' if arg == 'command' else 'int',
+                            type=str if arg != 'wait' else int,
+                            default=default_val)
+
     optional.add_argument('--help', '-h',
                             help='Show this help message and exit',
                             action='help',
                             default=argparse.SUPPRESS)
     args = arg_parser.parse_args()
-    if(not args.logfile):
-        print('[error] No logfile specified')
+
+    missing_args = [arg for arg, env_var in env_vars.items() if not getattr(args, arg)]
+    if missing_args:
+        print(f'[error] The following arguments were not specified: {", ".join(missing_args)}')
         arg_parser.print_help()
         exit(1)
-    if(not args.pattern):
-        print('[error] No pattern specified')
-        arg_parser.print_help()
-        exit(1)
-    if(not args.command):
-        print('[error] No command specified')
-        arg_parser.print_help()
-        exit(1)
+
     return args
 
 class EventHandler(pyinotify.ProcessEvent):
