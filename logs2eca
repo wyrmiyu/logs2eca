@@ -1,0 +1,235 @@
+#!/usr/bin/env python3
+import os
+import re
+import time
+import signal
+import subprocess
+import argparse
+import pyinotify
+from pathlib import Path
+from typing import Pattern
+
+handler = None  # declare handler as a global variable
+
+def parse_args():
+    """
+    This function parses the command line arguments. It will return a
+    argparse.Namespace object, which is a simple object that has attributes
+    that correspond to the command line arguments.
+    returns: logfile, pattern, command, wait
+    """
+
+    desc = ('Monitor a log file for events and run a command when an event '
+            'is detected.')
+    epilogue = ('The pattern can be a string or a regular expression. If it '
+                'is a string, it can be a substring of a line or a word in '
+                'a line. Regular expressions must be enclosed in any of the '
+                'following characters: /, |, %')
+    arg_parser = argparse.ArgumentParser(description=desc,
+                                        epilog=epilogue,
+                                        add_help=False)
+    required = arg_parser.add_argument_group('Required arguments')
+    optional = arg_parser.add_argument_group('Optional arguments')
+    help = ('The log file to monitor for events. Can be omitted, if '
+            'provided with the environment variable: LOGS2ECA_LOG_FILE')
+    required.add_argument('--logfile', '-l',
+                            required=True,
+                            help=help,
+                            dest='logfile',
+                            metavar='FILE',
+                            type=str,
+                            default=os.getenv('LOGS2ECA_LOG_FILE', ''))
+    help = ('The pattern to match in the log file. Can be omitted, if '
+            'provided with the environment variable: LOGS2ECA_EVENT_PATTERN')
+    required.add_argument('--pattern', '-p',
+                            required=True,
+                            help=help,
+                            dest='pattern',
+                            metavar='STRING|REGEX',
+                            type=str,
+                            default=os.getenv('LOGS2ECA_EVENT_PATTERN', ''))
+    help = ('The command to run when an event is detected. Can be omitted, if '
+            'provided with the environment variable: LOGS2ECA_COMMAND')
+    required.add_argument('--command', '-c',
+                            required=True,
+                            help=help,
+                            dest='command',
+                            metavar='CMD',
+                            type=str,
+                            default=os.getenv('LOGS2ECA_COMMAND', ''))
+    help = ('The number of seconds to wait before resuming monitoring the log '
+            'file after an event has been detected. Defaults to 3. '
+            'Can also be provided with the environment variable: LOGS2ECA_WAIT')
+    optional.add_argument('--wait', '-w',
+                            help=help,
+                            dest='wait',
+                            metavar='int',
+                            type=int,
+                            default=os.getenv('LOGS2ECA_WAIT', 3))
+    optional.add_argument('--help', '-h',
+                            help='Show this help message and exit',
+                            action='help',
+                            default=argparse.SUPPRESS)
+    return arg_parser.parse_args()
+
+class EventHandler(pyinotify.ProcessEvent):
+    """
+    pyinoify.ProcessEvent is a class that handles events triggered by the
+    pyinotify.WatchManager. It has methods for handling different types
+    of events. We will be using the following methods:
+        process_IN_MODIFY  - triggered when the log file is modified
+        process_IN_CREATE  - triggered when the log file is created
+        process_IN_DELETE  - triggered when the log file is deleted
+        process_IN_MOVED_FROM - triggered when the log file is moved
+    """
+
+    def my_init(self, logfile, pattern, command, wait):
+        """
+        This method is called by __init__ and is meant for user-defined
+        initialization. It sets up the logfile, pattern, command, and wait
+        attributes. It also sets up the file attribute, which is a file
+        handle to the logfile, and the current_position attribute, which is
+        the current position of the file handle. If the logfile does not
+        exist, it will set the file attribute to None, and the current
+        position to 0.
+        """
+
+        self.logfile = Path(logfile).absolute()
+        self.pattern = pattern
+        self.command = command
+        self.wait = wait
+
+        if(self.logfile.exists()):
+            print(f"[info] Logfile '{self.logfile}' exists")
+            self.current_position = self.logfile.stat().st_size
+            self.file = open(self.logfile, 'a+')
+            self.file.seek(self.current_position)
+        else:
+            print(f"[warn] Logfile '{self.logfile}' does not exist, "
+                "will wait for it to be created.")
+            self.file = None
+            self.current_position = 0
+
+    def process_IN_MODIFY(self, event):
+        """
+        This method will read the log file from the lastknown position to the
+        end of the file, and if the pattern is found in any of the lines, it
+        will call the run_command method.
+        """
+
+        if(Path(event.pathname) == self.logfile):
+            if(self.file):
+                self.file.seek(self.current_position)
+                for line in self.file:
+                    if(isinstance(self.pattern, Pattern)):
+                        if(self.pattern.search(line)):
+                            print(f"[info] Event: {line.strip()}")
+                            print(f"[info] Matching the regex pattern: "
+                                f"{self.pattern.pattern}")
+                            self.run_command()
+                    else:
+                        if(self.pattern in line):
+                            print(f"[info] Event: {line.strip()}")
+                            print(f"[info] Matching the pattern: "
+                                    f"{self.pattern}")
+                            self.run_command()
+                self.current_position = self.file.tell()
+
+    def process_IN_CREATE(self, event):
+        """
+        This method will close the current file handle (if any), open a new
+        one, and reset the current position to 0.
+        """
+
+        if(Path(event.pathname) == self.logfile):
+            print(f"[info] Logfile '{self.logfile}' created")
+            self.file = open(self.logfile, 'a+')
+            self.current_position = 0
+
+    def process_IN_DELETE(self, event):
+        """
+        Handles IN_DELETE events, which are triggered when the log file is
+        deleted. This method will close the current file handle, and set it to
+        None, and reset the current position to 0.
+        """
+
+        if(Path(event.pathname) == self.logfile):
+            print( f"[info] Logfile '{self.logfile}' deleted, "
+                    "closing and waiting for it to be re-created.")
+            if(self.file):
+                self.file.close()
+            self.file = None
+
+    def process_IN_MOVED_FROM(self, event):
+        """
+        This method will run the command specified by the user. It will print
+        the command to stdout, and then run it using the subprocess module.
+        It will then sleep for the number of seconds specified by the user.
+        """
+
+        if(Path(event.pathname) == self.logfile):
+            print( f"[info] Logfile '{self.logfile}' moved, "
+                    "closing and waiting for it to be re-created.")
+            if(self.file):
+                self.file.close()
+            self.file = None
+
+    def run_command(self):
+        """
+        This method is called when the EventHandler object is destroyed.
+        It will close the current file handle (if any).
+        """        print(f"[info] Running command: '{self.command}'")
+        subprocess.call(self.command, shell=True)
+        time.sleep(self.wait)
+
+    def __del__(self):
+        """
+        Handles SIGHUP signals. This method will close the current file handle
+        (if any), open a new one, and reset the current position to 0.
+        """
+        if(self.file):
+            self.file.close()
+
+def handle_sighup(signal, frame):
+    """
+    Handles SIGHUP signals. This method will close the current file handle
+    (if any), open a new one, and reset the current position to 0.
+    """
+    global handler  # specify that we are using the global handler variable
+    print("[info] Received SIGHUP")
+    if(handler.file):
+        handler.file.close()
+    handler.file = open(handler.logfile, 'r')
+    handler.current_position = 0
+
+def main():
+    """
+    The main method. This method will parse the command line arguments, set
+    up the signal handler for SIGHUP, start the pyinotify.WatchManager and
+    the pyinotify.Notifier.
+    The WatchManager will watch the directory containing the log file for
+    changes, and the Notifier will call the EventHandler methods when
+    changes are detected.
+    """
+
+    global handler  # specify that we are using the global handler variable
+    args = parse_args()
+    signal.signal(signal.SIGHUP, handle_sighup)
+    pattern = args.pattern.strip()
+    re_indicators = ('/', '|', '%')
+    for indicator in re_indicators:
+        if(pattern.startswith(indicator) and pattern.endswith(indicator)):
+            pattern = re.compile(pattern[1:-1])
+            break
+
+    wm = pyinotify.WatchManager()
+    handler = EventHandler( logfile=args.logfile.strip(),
+                            pattern=pattern,
+                            command=args.command.strip(),
+                            wait=args.wait)
+    notifier = pyinotify.Notifier(wm, handler)
+    wm.add_watch(str(Path(args.logfile).parent), pyinotify.ALL_EVENTS)
+    notifier.loop()
+
+if(__name__ == "__main__"):
+    main()
