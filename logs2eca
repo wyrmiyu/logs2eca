@@ -178,7 +178,8 @@ class EventHandler(pyinotify.ProcessEvent):
         """
         This method is called when the EventHandler object is destroyed.
         It will close the current file handle (if any).
-        """        print(f"[info] Running command: '{self.command}'")
+        """
+        print(f"[info] Running command: '{self.command}'")
         subprocess.call(self.command, shell=True)
         time.sleep(self.wait)
 

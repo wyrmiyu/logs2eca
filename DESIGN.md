@@ -1,7 +1,38 @@
-# Design Document for logs2eca
+# Design of logs2eca
 
 ## Overview
-This Python script, named `logs2eca`, monitors a log file for specific error patterns and executes a given command when the error pattern is detected.
+
+The `logs2eca` script operates based on an event-condition-action (ECA) model to a limited extent, where the event is a modification in a log file, the condition is a match with a user-specified pattern (either a string or a regular expression), and the action is the execution of a user-defined command.
+
+This script monitors a specified log file for the occurrence of a defined pattern. Upon detecting the pattern, it executes a given command and waits for a defined interval before resuming the monitoring process. The pattern can be specified as a regex pattern if it is enclosed by "/", "|", or "%". The script only considers log lines that are written after it starts execution and does not parse pre-existing lines.
+
+## Components
+
+The script consists of multiple components that work together to enable the desired functionality:
+
+### The main function
+
+The main function parses the command-line arguments, sets up the signal handler for SIGHUP, and starts the pyinotify.WatchManager and the pyinotify.Notifier. The WatchManager watches the directory containing the log file for changes, and the Notifier calls the EventHandler methods when changes are detected.
+
+### Command-line Argument Parsing
+
+The script uses the argparse module to parse command-line arguments. These arguments specify the log file to monitor, the error pattern to search for, the command to execute when the pattern is found, and an optional wait time (in seconds) to pause execution after running the command.
+
+### Log File Monitoring
+
+The script utilizes the pyinotify module to interface with the inotify API of the Linux kernel. This allows the script to efficiently monitor the log file for changes without the need for polling.
+
+The event handler (an instance of the `EventHandler` class) processes changes in the log file and responds appropriately. The handler includes methods to manage various events such as log file modification, creation, deletion, and relocation.
+
+### Pattern Detection and Command Execution
+
+When a modification event occurs, the script reads the new data, and if it matches the error pattern, the script triggers the user-defined command using the subprocess module. It then waits for a specified duration before resuming monitoring. This allows the invoked process time to execute and potentially fix the issue that caused the error before monitoring is resumed.
+
+### Signal Handling and Log Rotation
+
+The script also responds to SIGHUP signals. This is particularly important to handle log rotation scenarios. When a SIGHUP signal is received, the script closes and reopens the log file to ensure it can continue monitoring the new log file post-rotation.
+
+The design of `logs2eca` leverages the event-condition-action principle to provide a robust and efficient mechanism for real-time log file monitoring and error handling.
 
 ## Inputs
 The script takes in four arguments that can also be provided as environment variables:
@@ -30,24 +61,8 @@ The `EventHandler` class implements the following methods to handle filesystem e
 
 4. `process_IN_MOVED_FROM`: This method behaves similar to the `process_IN_DELETE` method. It closes the log file handle and sets it to None when a file move event is detected.
 
-The script also listens to the SIGHUP signal to handle log rotation. When it receives a SIGHUP signal, it closes the current file handle, opens a new one, and resets the current position to 0 using the `handle_sighup` function.
+The script also listens to the SIGHUP signals, that are typically sent during log rotation processes in Unix systems. When it receives a SIGHUP signal, it closes the current file handle, reopens the file, and resets the current position to 0 using the `handle_sighup` function.
 
 When an error pattern is detected in the log file, the `run_command` method of the `EventHandler` class executes the provided command using the `subprocess.call` method. After running the command, the script waits for the specified wait time before resuming the monitoring of the log file.
 
-## Finalization
 When the `EventHandler` object is destroyed, the `__del__` method is called. This method closes the log file handle if it is open.
-
-## Main Function
-
-The script execution starts from the main function, which does the following tasks:
-
-1. Parses the command-line arguments.
-2. Validates the inputs, opens the log file and gets ready to monitor it.
-3. Sets up the pyinotify instance and the event handler.
-4. Enters the main loop to monitor the log file.
-
-The main loop runs until it's interrupted by a signal like SIGINT or SIGTERM. When it receives an interrupt signal, it cleans up and exits gracefully.
-
-### Signal Handling
-
-The script sets signal handlers for SIGINT, SIGTERM, and SIGHUP. When it receives a SIGINT or SIGTERM signal, it exits the main loop and cleans up. When it receives a SIGHUP signal, it handles log rotation by reopening the log file.
