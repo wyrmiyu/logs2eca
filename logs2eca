@@ -189,14 +189,18 @@ class EventHandler(pyinotify.ProcessEvent):
         the command to stdout, and then run it using the subprocess module.
         It will then sleep for the number of seconds specified by the user.
         """
-        print(f"{self.id} Running command: '{self.command}'")
-        result = subprocess.run(self.command, shell=True, capture_output=True, text=True)
 
-        # Print the output of the command
-        if result.stdout:
-            print(f"Command stdout: {result.stdout}")
-        if result.stderr:
-            print(f"Command stderr: {result.stderr}", file=sys.stderr)
+        print(f"{self.id} Running command: '{self.command}'")
+        try:
+            result = subprocess.run(self.command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+            # Print the output of the command
+            if result.stdout:
+                print(f"Command stdout: {result.stdout.decode('utf-8')}")
+            if result.stderr:
+                print(f"Command stderr: {result.stderr.decode('utf-8')}", file=sys.stderr)
+        except subprocess.CalledProcessError as e:
+            print(f"Command failed with error {e}")
 
         time.sleep(self.wait)
 
@@ -209,10 +213,23 @@ class EventHandler(pyinotify.ProcessEvent):
             self.file.close()
 
 class LogFileMonitor:
+    """
+    This class is the main class of the program. It will parse the command
+    line arguments, and then create an instance of the EventHandler class,
+    and then start the pyinotify.Notifier.
+    """
     def __init__(self):
+        """
+        This method will declare the handler attribute, which is an instance
+        of the EventHandler class.
+        """
         self.handler = None
 
     def handle_sighup(self, signal, frame):
+        """
+        Handles SIGHUP signals. This method will close the current file handle
+        (if any), open a new one, and reset the current position to 0.
+        """
         print("[info] Received SIGHUP")
         if self.handler and self.handler.file:
             self.handler.file.close()
