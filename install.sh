@@ -49,5 +49,5 @@ msg="When creating an instance of the service:
 1. copy this file to ${ENV_LOCATION}/instance_name.monitor,
 2. edit it for your use case, and
 3. apply by enabling and starting the service with:
-# systemctl enable --now logs2eca@instance_name.service"
+# systemctl enable --now logs2eca@instance_name.service\n"
 printf "$msg"
