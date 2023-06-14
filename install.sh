@@ -42,4 +42,12 @@ install -m 644 -o root -g root ${SCRIPTS_LOCATION}/logs2eca_env_template ${ENV_L
 systemctl daemon-reload
 
 echo "Installation complete!"
-echo "The environment file template for the systemd service template logs2eca@.service is located at ${ENV_LOCATION}/logs2eca_env_template. When creating an instance of the service, copy this file to ${ENV_LOCATION}/instance_name.monitor, edit it for your use casa and apply by enabling starting the service with: systemctl enable --now logs2eca@instance_name.service"
+msg="The environment file template for the systemd service template:\n
+\tlogs2eca@.service\nis located at: ${ENV_LOCATION}/logs2eca_env_template\n"
+printf "$msg"
+msg="When creating an instance of the service:
+1. copy this file to ${ENV_LOCATION}/instance_name.monitor,
+2. edit it for your use case, and
+3. apply by enabling and starting the service with:
+# systemctl enable --now logs2eca@instance_name.service"
+printf "$msg"
