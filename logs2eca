@@ -1,75 +1,180 @@
 #!/usr/bin/env python3
-import os
-import sys
-import re
-import time
-import signal
-import subprocess
-import argparse
-import pyinotify
-import uuid
 from pathlib import Path
 from typing import Pattern
+import argparse
+import logging
+import os
+import pyinotify
+import re
+import signal
+import subprocess
+import sys
+import time
+import uuid
+
+logging.basicConfig(level=logging.ERROR)
 
 # Constants
 RE_INDICATORS = ('/', '|', '%')
+DEFAULT_LOGS2ECA_WAIT = 3
+DEFAULT_SUBSTRING_MATCH = False
+
+class ArgumentParsingError(Exception):
+    pass
+
+class MainExecutionError(Exception):
+    pass
+
+class MissingRequiredArgumentError(Exception):
+    pass
+
+class SIGHUPHandlingError(Exception):
+    pass
 
 def parse_args():
     """
     This function parses the command line arguments. It will return a
-    argparse.Namespace object, which has attributes
-    that correspond to the command line arguments.
-    returns: logfile, pattern, command, wait
+    argparse.Namespace object, which has attributes that correspond to
+    the command line arguments. The function uses a dictionary with
+    the following data structure to define the command line arguments:
+    dict = {
+        'arg_name': {
+            'opts': ['--arg_name', '-a'],
+            'required': True,  # or False
+            'type': str,  # or int, float, bool, etc.
+            'metavar': 'arg_value', # e.g. file, string, int, etc.
+            'env': 'ENV_VAR_NAME', # e.g. LOGS2ECA_LOG_FILE
+            'default': const, # e.g. DEFAULT_LOGS2ECA_LOG_FILE or None
+            'help': 'help message',
+            },
+        ...
+    }
+    returns: Namespace[logfile, pattern, command, wait, substring_match]
     """
 
-    desc = ('Monitor a log file for events and run a command when an event '
-            'is detected.')
-    epilogue = ('The pattern can be a string or a regular expression. If it '
-                'is a string, it can be a substring of a line or a word in '
-                'a line. Regular expressions must be enclosed in any of the '
-                'following characters: /, |, %')
-    arg_parser = argparse.ArgumentParser(description=desc,
-                                        epilog=epilogue,
-                                        add_help=False)
-    required = arg_parser.add_argument_group('Required arguments')
-    optional = arg_parser.add_argument_group('Optional arguments')
+    try:
+        desc = ('Monitor a log file for events and run a command when '
+                'an event is detected.')
+        epilogue = ('The pattern can be a string or a regular expression. '
+                    'If it is a string, it can be a substring of a line or '
+                    'a word in a line. Regular expressions must be enclosed '
+                    'in any of the following characters: '
+                    f'{", ".join(str(i) for i in list(RE_INDICATORS))}')
+        arg_parser = argparse.ArgumentParser(
+            description=desc,
+            epilog=epilogue,
+            add_help=False,
+            formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+        required = arg_parser.add_argument_group('Required arguments')
+        optional = arg_parser.add_argument_group('Optional arguments')
 
-    help_text = {
-        'logfile': 'The log file to monitor for events',
-        'pattern': 'The pattern to match in the log file',
-        'command': 'The command to run when an event is detected',
-        'wait': 'The number of seconds to wait before resuming monitoring the log file after an event has been detected. Defaults to 3'
-    }
+        arg_dict = {
+            'logfile': {
+                "opts": ["--logfile", "-l"],
+                "required": True,
+                "type": str,
+                "metavar": "FILE",
+                "env": "LOGS2ECA_LOG_FILE",
+                "default": "",
+                "help": "The log file to monitor for events.",
+            },
+            "pattern": {
+                "opts": ["--pattern", "-p"],
+                "required": True,
+                "type": str,
+                "metavar": "STRING|REGEX",
+                "env": "LOGS2ECA_EVENT_PATTERN",
+                "default": "",
+                "help": "The pattern to match in the log file.",
+            },
+            "command": {
+                "opts": ["--command", "-c"],
+                "required": True,
+                "type": str,
+                "metavar": "CMD",
+                "env": "LOGS2ECA_COMMAND",
+                "default": "",
+                "help": "The command to run when an event is detected.",
+            },
+            "wait": {
+                "opts": ["--wait", "-w"],
+                "required": False,
+                "type": int,
+                "metavar": "int",
+                "env": "LOGS2ECA_WAIT",
+                "default": DEFAULT_LOGS2ECA_WAIT,
+                "help": (
+                    "The number of seconds to wait before resuming monitoring "
+                    "the log file after an event has been detected."
+                ),
+            },
+            "substring_match": {
+                "opts": ["--substring_match", "-s"],
+                "required": False,
+                "type": bool,
+                "metavar": "bool",
+                "env": "LOGS2ECA_SUBSTRING_MATCH",
+                "default": DEFAULT_SUBSTRING_MATCH,
+                "help": (
+                    "If the pattern is a string, this flag will make logs2eca "
+                    "match the pattern as a substring of a line instead of "
+                    "a word in a line."
+                ),
+            },
+        }
 
-    env_vars = {
-        'logfile': 'LOGS2ECA_LOG_FILE',
-        'pattern': 'LOGS2ECA_EVENT_PATTERN',
-        'command': 'LOGS2ECA_COMMAND',
-        'wait': 'LOGS2ECA_WAIT'
-    }
+        for arg, params in arg_dict.items():
+            arg_default = None
+            if(os.environ.get(params.get("env"))):
+                arg_default = os.environ.get(params.get("env"))
+            elif(params.get("default")):
+                arg_default = params.get("default")
 
-    for arg, env_var in env_vars.items():
-        required_val = required if arg in ['logfile', 'pattern', 'command'] else optional
-        default_val = os.getenv(env_vars[arg]) if os.getenv(env_vars[arg]) else None if arg in ['logfile', 'pattern', 'command'] else 3
+            arg_help = params.get("help")
+            if(params.get("env")):
+                if(params.get("required")):
+                    arg_help = (f'{arg_help} Can only be omitted if provided '
+                                f'with the environment variable: '
+                                f'{params.get("env")}')
+                else:
+                    arg_help = (f'{arg_help} Can optionally be provided with '
+                                f'the environment variable: '
+                                f'{params.get("env")}')
+            arg_group = optional
+            if(params.get("required")):
+                arg_group = required
+            arg_group.add_argument(
+                *params.get("opts"),
+                required=params.get("required"),
+                type=params.get("type"),
+                dest=arg,
+                metavar=params.get("metavar"),
+                default=arg_default,
+                help=arg_help)
 
-        required_val.add_argument('--' + arg, '-'+ arg[0],
-                            help= f'{help_text[arg]}. Can be omitted if provided with the environment variable: {env_vars[arg]}',
-                            dest=arg,
-                            metavar='FILE' if arg == 'logfile' else 'STRING|REGEX' if arg == 'pattern' else 'CMD' if arg == 'command' else 'int',
-                            type=str if arg != 'wait' else int,
-                            default=default_val)
+        optional.add_argument(
+            '--help', '-h',
+            help='Show this help message and exit',
+            action='help',
+            default=argparse.SUPPRESS)
 
-    optional.add_argument('--help', '-h',
-                            help='Show this help message and exit',
-                            action='help',
-                            default=argparse.SUPPRESS)
-    args = arg_parser.parse_args()
+        args = arg_parser.parse_args()
 
-    missing_args = [arg for arg, env_var in env_vars.items() if not getattr(args, arg)]
-    if missing_args:
-        print(f'[error] The following arguments were not specified: {", ".join(missing_args)}')
-        arg_parser.print_help()
-        exit(1)
+            # Verify all required arguments are provided
+        missing_args = []
+        for arg, params in arg_dict.items():
+            if(params.get("required") and getattr(args, arg) is None):
+                missing_args.append(arg)
+        if missing_args:
+            raise MissingRequiredArgumentError(
+                f'Missing required argument: {arg}'
+            )
+
+    except argparse.ArgumentError as e:
+        raise ArgumentParsingError(f'Error parsing arguments: {str(e)}')
+
+    except Exception as e:
+        raise ArgumentParsingError(f'Unexpected error during argument parsing: {str(e)}')
 
     return args
 
@@ -84,42 +189,75 @@ class EventHandler(pyinotify.ProcessEvent):
         process_IN_MOVED_FROM - triggered when the log file is moved
     """
 
-    def my_init(self, logfile, pattern, command, wait):
+    def my_init(self, logfile, pattern, command, wait, substring_match=False):
         """
         This method is called by __init__ and is meant for user-defined
-        initialization. It sets up the logfile, pattern, command, and wait
-        attributes. It also sets up the file attribute, which is a file
-        handle to the logfile, and the current_position attribute, which is
-        the current position of the file handle. If the logfile does not
-        exist, it will set the file attribute to None, and the current
-        position to 0.
+        initialization. It performs the following:
+
+        1. Sets up:
+            - The logfile, pattern, command, wait and substring_match
+            attributes.
+            - The file attribute, which is a file handle to the logfile.
+            - The current_position attribute, which is the current position of
+            the file handle.
+
+        2. If the logfile does not exist, the file attribute is set to None,
+        and the current position to 0.
+
+        3. Creates an unique id for the logs2eca instance to distinct it from
+        other instances, the format is: <UUID>, where UUID is a 8 letter
+        hexadecimal string generated by uuid.uuid4().
+
+        4. Sets up the pattern_match attribute, which is a function that
+        returns True if the pattern is found in the line passed to it, and
+        False otherwise.
+            - If the pattern is a string, it will check if the pattern is
+            found either as a substring or as a word in the line depending on
+            the substring_match attribute.
+            - If the pattern is a regular expression, it will check if
+            the pattern matches
         """
 
         self.logfile = Path(logfile).absolute()
         self.pattern = pattern
         self.command = command
         self.wait = wait
+        self.substring_match = substring_match
         # Create an unique id for the logs2eca instance to distinct it from
         # other instances, the format is: <UUID>, where UUID is
         # a 8 letter hexadecimal string generated by uuid.uuid4()
         self.id = f"<{uuid.uuid4().hex[:8]}>"
 
         if(self.logfile.exists()):
-            print(f"{self.id} Logfile '{self.logfile}' exists")
-            self.current_position = self.logfile.stat().st_size
-            self.file = open(self.logfile, 'a+')
-            self.file.seek(self.current_position)
+            try:
+                print(f"{self.id} Logfile '{self.logfile}' exists")
+                self.current_position = self.logfile.stat().st_size
+                self.file = open(self.logfile, 'a+')
+                self.file.seek(self.current_position)
+            except PermissionError:
+                raise MainExecutionError(
+                    f"Permission denied to open file '{self.logfile}'"
+                )
+            except FileNotFoundError:
+                raise MainExecutionError(
+                    f"File '{self.logfile}' does not exist"
+                )
         else:
-            print(f"[warn] Logfile '{self.logfile}' does not exist, "
+            w = (f"[warn] Logfile '{self.logfile}' does not exist, "
                 "will wait for it to be created.")
+            print(w)
             self.file = None
             self.current_position = 0
+
 
         # The check whether Pattern is a string or a re.compile object.
         if(isinstance(self.pattern, Pattern)):
             self.pattern_match = lambda line: self.pattern.search(line)
         else:
-            self.pattern_match = lambda line: self.pattern in line
+            if(self.substring_match):
+                self.pattern_match = lambda line: self.pattern in line
+            else:
+                self.pattern_match = lambda line: self.pattern in line.split()
 
     def process_IN_MODIFY(self, event):
         """
@@ -191,19 +329,22 @@ class EventHandler(pyinotify.ProcessEvent):
         It will then sleep for the number of seconds specified by the user.
         """
 
-        print(f"{self.id} Running command: '{self.command}'")
         try:
+            print(f"{self.id} Running command: '{self.command}'")
             result = subprocess.run(self.command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-
             # Print the output of the command
             if result.stdout:
                 print(f"Command stdout: {result.stdout.decode('utf-8')}")
             if result.stderr:
                 print(f"Command stderr: {result.stderr.decode('utf-8')}", file=sys.stderr)
+
+        except FileNotFoundError:
+            raise MainExecutionError(f"Command '{self.command}' not found")
         except subprocess.CalledProcessError as e:
-            print(f"Command failed with error {e}")
+            raise MainExecutionError(f"Command '{self.command}' failed with error: {str(e)}")
 
         time.sleep(self.wait)
+
 
     def __del__(self):
         """
@@ -231,30 +372,54 @@ class LogFileMonitor:
         Handles SIGHUP signals. This method will close the current file handle
         (if any), open a new one, and reset the current position to 0.
         """
-        print("[info] Received SIGHUP")
-        if self.handler and self.handler.file:
-            self.handler.file.close()
-            self.handler.file = open(self.handler.logfile, 'r')
-            self.handler.current_position = 0
+        try:
+            print("[info] Received SIGHUP")
+            if self.handler and self.handler.file:
+                self.handler.file.close()
+                self.handler.file = open(self.handler.logfile, 'r')
+                self.handler.current_position = 0
+        except IOError as e:
+            logging.error(f'Error handling SIGHUP signal: {str(e)}')
+        except Exception as e:
+            logging.error(f'Unexpected error during SIGHUP handling: {str(e)}')
 
     def run(self):
-        args = parse_args()
-        signal.signal(signal.SIGHUP, self.handle_sighup)
-        pattern = args.pattern.strip()
-        for indicator in RE_INDICATORS:
-            if(pattern.startswith(indicator) and pattern.endswith(indicator)):
-                pattern = re.compile(pattern[1:-1])
-                break
+        try:
+            args = parse_args()
+            signal.signal(signal.SIGHUP, self.handle_sighup)
+            pattern = args.pattern.strip()
+            for indicator in RE_INDICATORS:
+                if(
+                    pattern.startswith(indicator) and
+                    pattern.endswith(indicator)
+                ):
+                    try:
+                        pattern = re.compile(pattern[1:-1])
+                        break
+                    except re.error:
+                        raise ArgumentParsingError(
+                            f"Invalid regular expression pattern '{pattern}'"
+                        )
 
-        wm = pyinotify.WatchManager()
-        self.handler = EventHandler( logfile=args.logfile.strip(),
-                                pattern=pattern,
-                                command=args.command.strip(),
-                                wait=args.wait)
-        notifier = pyinotify.Notifier(wm, self.handler)
-        wm.add_watch(str(Path(args.logfile).parent), pyinotify.ALL_EVENTS)
-        notifier.loop()
+            wm = pyinotify.WatchManager()
+            self.handler = EventHandler( logfile=args.logfile.strip(),
+                                    pattern=pattern,
+                                    command=args.command.strip(),
+                                    wait=args.wait)
+            notifier = pyinotify.Notifier(wm, self.handler)
+            wm.add_watch(str(Path(args.logfile).parent), pyinotify.ALL_EVENTS)
+            notifier.loop()
+        except Exception as e:
+            raise MainExecutionError(
+                f'Unexpected error during the main execution: {str(e)}')
 
 if(__name__ == "__main__"):
-    monitor = LogFileMonitor()
-    monitor.run()
+    try:
+        monitor = LogFileMonitor()
+        monitor.run()
+    except MissingRequiredArgumentError as e:
+        print(str(e), file=sys.stderr)
+    except KeyboardInterrupt:
+        print('Interrupted by user', file=sys.stderr)
+    except (ArgumentParsingError, SIGHUPHandlingError, MainExecutionError) as e:
+        print(str(e), file=sys.stderr)
