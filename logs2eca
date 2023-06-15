@@ -145,6 +145,12 @@ def parse_args():
                 arg_group = required
             arg_group.add_argument(
                 *params.get("opts"),
+                # Since both commandline arguments and environment variables
+                # are used to set the arguments, and argparse only considers
+                # commandline arguments when checking for required arguments,
+                # we set required=False and check for missing arguments
+                # manually.
+                required=False
                 type=params.get("type"),
                 dest=arg,
                 metavar=params.get("metavar"),
@@ -155,7 +161,7 @@ def parse_args():
             '--help', '-h',
             help='Show this help message and exit',
             action='help',
-            default=argparse.SUPPRESS)
+            default=argparse.SUPPRESS)<
 
         args = arg_parser.parse_args()
 
