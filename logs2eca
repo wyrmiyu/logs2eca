@@ -145,7 +145,6 @@ def parse_args():
                 arg_group = required
             arg_group.add_argument(
                 *params.get("opts"),
-                required=params.get("required"),
                 type=params.get("type"),
                 dest=arg,
                 metavar=params.get("metavar"),
