@@ -5,8 +5,10 @@
 # vscode extensions
 .lh/
 
-# Local test directory
+# Local test directories
 /local-test/
+/localtest/
+/local_test/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
