@@ -42,12 +42,28 @@ install -m 644 -o root -g root ${SCRIPTS_LOCATION}/logs2eca_env_template ${ENV_L
 systemctl daemon-reload
 
 echo "Installation complete!"
-msg="The environment file template for the systemd service template:\n
-\tlogs2eca@.service\nis located at: ${ENV_LOCATION}/logs2eca_env_template\n"
-printf "$msg"
-msg="When creating an instance of the service:
-1. copy this file to ${ENV_LOCATION}/instance_name.monitor,
-2. edit it for your use case, and
-3. apply by enabling and starting the service with:
-# systemctl enable --now logs2eca@instance_name.service\n"
+msg="
+Systemd service template: ${SYSTEMD_LOCATION}/logs2eca@.service
+Environment file template: ${ENV_LOCATION}/logs2eca_env_template
+
+When creating an instance of the logs2eca service, follow these steps:
+
+1. Choose a name for your instance that reflects its purpose.
+    - The name must be unique.
+    - Both the service and environment file must use the same name.
+    - Replace <instance_name> with the name in the following steps.
+
+2. Copy the environment template to: ${ENV_LOCATION}/<instance_name>.monitor
+    - Note that the file name must end with a '.monitor' extension.
+    - E.g. 'sssd.monitor' or 'httpd_access_log.monitor'
+    - Edit the file and fill in values for the following constants:
+        LOGS2ECA_LOG_FILE
+        LOGS2ECA_EVENT_PATTERN
+        LOGS2ECA_COMMAND
+
+3. Apply by enabling and starting the service with:
+
+    # systemctl enable --now logs2eca@<instance_name>.service
+
+"
 printf "$msg"
