@@ -40,7 +40,11 @@ Here's an example of how to run `logs2eca` via command line:
 logs2eca --logfile /var/log/sssd/sssd_implicit_files.log --pattern "timed out before identification" --command "systemctl restart sssd.service" --wait 5
 ```
 
-If the error pattern is surrounded by `/`, `|`, or `%`, it will be interpreted as a regex pattern.
+If the error pattern is surrounded by `/`, `|`, or `%`, it will be interpreted as a regex pattern. However, one does not have to escape those characters, even if they are used in the actual regex pattern.
+
+When the pattern is a string, the pattern will be matched using Python's substring matching with the 'in' operator. By default, logs2eca adds a space at the start and end of both the line and the pattern to ensure that only whole words are matched. 
+
+However, if you want to match the pattern as a pure substring, you can use the `--arbitrary-substring-match` option. Do note that this option will also match the pattern as a substring of other words. For example, the pattern 'foo' will match all of the following strings: 'foobar', 'foofoobar', 'bazbarfoobar', etc.
 
 ## Additional Information
 
