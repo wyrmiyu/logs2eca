@@ -4,9 +4,9 @@ set -eo pipefail
 script_path="$(readlink -f -- $BASH_SOURCE)"
 script_dir="$(dirname $script_path)"
 
-src_dir="${LOGS2ECA_src_dir=$script_dir}"
-install_prefix="${LOGS2ECA_install_prefix:=/usr/local}"
-logs2eca_conf_dir="${LOGS2ECA_logs2eca_conf_dir:=/etc/logs2eca}"
+src_dir="${LOGS2ECA_SRC_DIR:=$script_dir}"
+install_dir="${LOGS2ECA_INSTALL_DIR:=/usr/local}"
+logs2eca_conf_dir="${LOGS2ECA_CONF_DIR:=/etc/logs2eca}"
 SYSTEMD_DIR=/etc/systemd/system
 RPM_DEPS=python3-inotify
 
@@ -14,7 +14,7 @@ RPM_DEPS=python3-inotify
 while [[ "$#" -gt 0 ]]; do
     case $1 in
         -s|--src) src_dir="$2"; shift;;
-        -d|--dst) install_prefix="$2"; shift;;
+        -d|--dst) install_dir="$2"; shift;;
         *) echo "Unknown parameter: $1"; exit 1;;
     esac
     shift
@@ -27,10 +27,10 @@ if ! rpm -q python3-inotify > /dev/null 2>&1; then
 fi
 
 # Install the logs2eca script
-install -m 755 -o root -g root "${src_dir}/logs2eca" "${install_prefix}"/bin/logs2eca
+install -m 755 -o root -g root "${src_dir}/logs2eca" "${install_dir}"/bin/logs2eca
 
 # Install the systemd service, replacing the ExecStart path with the install location
-sed "s|/usr/bin/logs2eca|${install_prefix}/bin/logs2eca|g" "${src_dir}/logs2eca@.service" > "${SYSTEMD_DIR}/logs2eca@.service"
+sed "s|/usr/bin/logs2eca|${install_dir}/bin/logs2eca|g" "${src_dir}/logs2eca@.service" > "${SYSTEMD_DIR}/logs2eca@.service"
 
 # Create the environment file directory if it doesn't exist
 if [ ! -d "$logs2eca_conf_dir" ]; then
