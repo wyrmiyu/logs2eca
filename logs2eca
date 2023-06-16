@@ -52,17 +52,27 @@ def parse_args():
             },
         ...
     }
-    returns: Namespace[logfile, pattern, command, wait, arbitrary_string_match]
+    returns: Namespace[logfile, pattern, command, wait, arbitrary_substring_match]
     """
 
     try:
         desc = ('Monitor a log file for events and run a command when '
                 'an event is detected.')
-        epilogue = ('The pattern can be a string or a regular expression. '
-                    'If it is a string, it can be a substring of a line or '
-                    'a word in a line. Regular expressions must be enclosed '
-                    'in any of the following characters: '
-                    f'{", ".join(str(i) for i in list(RE_INDICATORS))}')
+        re_chars = ", ".join(list(RE_INDICATORS))
+        epilogue = (
+            "When the pattern is a string, the pattern will be matched "
+            "using Python's substring matching with the 'in' operator. "
+            "By default, logs2eca adds a space at the start and end of both "
+            "the line and the pattern to ensure that only whole words are "
+            "matched. However, if you want to match the pattern as "
+            "a pure substring, you can use the `--arbitrary-substring-match` "
+            "option. Do note that this option will also match the pattern "
+            "as a substring of other words. For example, the pattern 'foo' "
+            "will match all of the following strings: 'foobar', 'foofoobar', "
+            "'bazbarfoobar', etc. "
+            "Regular expressions must be enclosed in any of the following "
+            f"characters: {re_chars}. However, you do not need to escape those "
+            "characters, even if you use them in the actual regex pattern.")
         arg_parser = argparse.ArgumentParser(
             description=desc,
             epilog=epilogue,
@@ -88,7 +98,10 @@ def parse_args():
                 "metavar": "STRING|REGEX",
                 "env": "LOGS2ECA_EVENT_PATTERN",
                 "default": "",
-                "help": "The pattern to match in the log file.",
+                "help": (
+                    "The pattern to match in the log file, which can be "
+                    "either a string or a regular expression."
+                    ),
             },
             "command": {
                 "opts": ["--command", "-c"],
@@ -111,8 +124,8 @@ def parse_args():
                     "the log file after an event has been detected."
                 ),
             },
-            "arbitrary_string_match": {
-                "opts": ["--arbitrary_string_match", "-s"],
+            "arbitrary_substring_match": {
+                "opts": ["--arbitrary-substring-match", "-a"],
                 "required": False,
                 "type": bool,
                 "metavar": None,
@@ -127,11 +140,12 @@ def parse_args():
         }
 
         for arg, params in arg_dict.items():
-            arg_default = None
-            if(os.environ.get(params.get("env"))):
+            arg_default = params.get("default")
+            if(params.get("env") and os.environ.get(params.get("env"))):
                 arg_default = os.environ.get(params.get("env"))
-            elif(params.get("default")):
-                arg_default = params.get("default")
+                print(f"{arg}: arg_default = {arg_default}")
+
+            print(f"{arg}: arg_default = {arg_default}")
 
             arg_help = params.get("help")
             if(params.get("env")):
@@ -143,22 +157,30 @@ def parse_args():
                     arg_help = (f'{arg_help} Can optionally be provided with '
                                 f'the environment variable: '
                                 f'{params.get("env")}')
+
             arg_group = optional
             if(params.get("required")):
                 arg_group = required
-            arg_group.add_argument(
-                *params.get("opts"),
-                # Since both commandline arguments and environment variables
-                # are used to set the arguments, and argparse only considers
-                # commandline arguments when checking for required arguments,
-                # we set required=False and check for missing arguments
-                # manually.
-                required=False,
-                type=params.get("type"),
-                dest=arg,
-                metavar=params.get("metavar"),
-                default=arg_default,
-                help=arg_help)
+            # Since both commandline arguments and environment variables are
+            # used to set the arguments, and argparse only considers commandline
+            # arguments when checking for required arguments, we set
+            # required=False and check for missing arguments manually.
+            if(params.get("type") == bool):
+                arg_group.add_argument(
+                    *params.get("opts"),
+                    required=False,
+                    action="store_true",
+                    dest=arg,
+                    help=arg_help)
+            else:
+                arg_group.add_argument(
+                    *params.get("opts"),
+                    required=False,
+                    type=params.get("type"),
+                    dest=arg,
+                    metavar=params.get("metavar"),
+                    default=arg_default,
+                    help=arg_help)
 
         optional.add_argument(
             '--help', '-h',
@@ -167,8 +189,8 @@ def parse_args():
             default=argparse.SUPPRESS)
 
         args = arg_parser.parse_args()
-
-            # Verify all required arguments are provided
+        print(dict(args._get_kwargs()))
+        # Verify all required arguments are provided
         missing_args = []
         for arg, params in arg_dict.items():
             if(params.get("required") and getattr(args, arg) is None):
@@ -197,13 +219,13 @@ class EventHandler(pyinotify.ProcessEvent):
         process_IN_MOVED_FROM - triggered when the log file is moved
     """
 
-    def my_init(self, logfile, pattern, command, wait, arbitrary_string_match=False):
+    def my_init(self, logfile, pattern, command, wait, arbitrary_substring_match):
         """
         This method is called by __init__ and is meant for user-defined
         initialization. It performs the following:
 
         1. Sets up:
-            - The logfile, pattern, command, wait and arbitrary_string_match
+            - The logfile, pattern, command, wait and arbitrary_substring_match
             attributes.
             - The file attribute, which is a file handle to the logfile.
             - The current_position attribute, which is the current position of
@@ -221,7 +243,7 @@ class EventHandler(pyinotify.ProcessEvent):
         False otherwise.
             - If the pattern is a string, it will check if the pattern is
             found either as a substring or as a word in the line depending on
-            the arbitrary_string_match attribute.
+            the arbitrary_substring_match attribute.
             - If the pattern is a regular expression, it will check if
             the pattern matches
         """
@@ -230,7 +252,7 @@ class EventHandler(pyinotify.ProcessEvent):
         self.pattern = pattern
         self.command = command
         self.wait = wait
-        self.arbitrary_string_match = arbitrary_string_match
+        self.arbitrary_substring_match = arbitrary_substring_match
         # Create an unique id for the logs2eca instance to distinct it from
         # other instances, the format is: <UUID>, where UUID is
         # a 8 letter hexadecimal string generated by uuid.uuid4()
@@ -260,7 +282,7 @@ class EventHandler(pyinotify.ProcessEvent):
         try:
             # Check if the pattern is a string or a regex pattern
             if(isinstance(self.pattern, str)):
-                if(self.arbitrary_string_match):
+                if(self.arbitrary_substring_match):
                     # If arbitrary string match is allowed, simply check if
                     # pattern is a substring of the line
                     self.pattern_match = lambda line: self.pattern in line
@@ -278,10 +300,21 @@ class EventHandler(pyinotify.ProcessEvent):
     def match_words(self, line):
         # Add space at start and end of line to allow matching pattern
         # at the start and end of the line
+        print(f"""
+            match_words() before f-strings:
+            line: "{line}"
+            self.pattern: "{self.pattern}"
+            """)
         line = f" {line} "
         # Add space at start and end of pattern to ensure only whole words
         # are matched
         pattern = f" {self.pattern} "
+        print(f"""
+            match_words() after f-strings:
+            line: "{line}"
+            pattern: "{pattern}"
+            pattern in line: {pattern in line}
+            """)
         return pattern in line
 
     def process_IN_MODIFY(self, event):
@@ -295,6 +328,7 @@ class EventHandler(pyinotify.ProcessEvent):
             if(self.file):
                 self.file.seek(self.current_position)
                 for line in self.file:
+                    line = line.strip()
                     if(self.id in line):
                         continue
                     if(self.pattern_match(line)):
@@ -427,10 +461,12 @@ class LogFileMonitor:
                         )
 
             wm = pyinotify.WatchManager()
-            self.handler = EventHandler( logfile=args.logfile.strip(),
-                                    pattern=pattern,
-                                    command=args.command.strip(),
-                                    wait=args.wait)
+            self.handler = EventHandler(
+                logfile=args.logfile.strip(),
+                pattern=pattern,
+                command=args.command.strip(),
+                wait=args.wait,
+                arbitrary_substring_match=args.arbitrary_substring_match)
             notifier = pyinotify.Notifier(wm, self.handler)
             wm.add_watch(str(Path(args.logfile).parent), pyinotify.ALL_EVENTS)
             notifier.loop()
@@ -451,3 +487,4 @@ if(__name__ == "__main__"):
             PatternMatchError,
             SIGHUPHandlingError) as e:
         print(str(e), file=sys.stderr)
+        raise
