@@ -23,7 +23,8 @@ LOGS2ECA_LOG_FILE=
 # string, it can be a substring of a line or a word in a line. Regular
 # expressions must be enclosed in any of the following characters: /, |, %
 #
-# Example with regex: LOGS2ECA_EVENT_PATTERN=/timed out before identification/
+# Example using the more efficient Python substring approach:
+# LOGS2ECA_EVENT_PATTERN="timed out before identification"
 #
 LOGS2ECA_EVENT_PATTERN=
 

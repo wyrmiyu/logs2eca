@@ -37,7 +37,7 @@ The script accepts the following four arguments which can be provided either as 
 Here's an example of how to run `logs2eca` via command line:
 
 ```bash
-logs2eca --logfile /var/log/sssd/sssd_implicit_files.log --pattern "/timed out before identification/" --command "systemctl restart sssd.service" --wait 5
+logs2eca --logfile /var/log/sssd/sssd_implicit_files.log --pattern "timed out before identification" --command "systemctl restart sssd.service" --wait 5
 ```
 
 If the error pattern is surrounded by `/`, `|`, or `%`, it will be interpreted as a regex pattern.
