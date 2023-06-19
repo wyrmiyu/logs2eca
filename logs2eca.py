@@ -352,7 +352,7 @@ class EventHandler(pyinotify.ProcessEvent):
                             print(info)
                         else:
                             info = (f"{self.id} Matching the pattern: "
-                                    "{self.pattern}")
+                                    f"{self.pattern}")
                             print(info)
                         self.run_command()
                 self.current_position = self.file.tell()
