@@ -4,21 +4,79 @@ set -eo pipefail
 script_path="$(readlink -f -- $BASH_SOURCE)"
 script_dir="$(dirname $script_path)"
 
-src_dir="${LOGS2ECA_SRC_DIR:=$script_dir}"
-install_dir="${LOGS2ECA_INSTALL_DIR:=/usr/local}"
-logs2eca_conf_dir="${LOGS2ECA_CONF_DIR:=/etc/logs2eca}"
 SYSTEMD_DIR=/etc/systemd/system
 RPM_DEPS=python3-inotify
 
+src_dir="${LOGS2ECA_SRC_DIR:=$script_dir}"
+install_bin_dir="${LOGS2ECA_INSTALL_BIN_DIR:=/usr/local/bin}"
+logs2eca_conf_dir="${LOGS2ECA_CONF_DIR:=/etc/logs2eca}"
+
+
+usage="Usage: $0 [-s|--src <src_dir>] [-d|--dst <install_bin_dir>]
+
+Optional parameters:
+-s, --src                   Define the source directory
+-d, --dst                   Define the installation directory for the script
+-c, --conf                  Define the directory for the configuration files
+
+Environment Variables:
+LOGS2ECA_SRC_DIR            Define the source directory
+LOGS2ECA_INSTALL_BIN_DIR    Define the installation directory for the script
+LOGS2ECA_CONF_DIR           Define the directory for the configuration files
+
+Defaults:
+- Source directory: The directory of the installation script
+- Installation directory: /usr/local/bin
+- Configuration directory: /etc/logs2eca
+
+"
+
+function usage {
+    echo "$usage"
+    exit 1
+}
+
 # Process command line options
-while [[ "$#" -gt 0 ]]; do
+while (( "$#" )); do
     case $1 in
-        -s|--src) src_dir="$2"; shift;;
-        -d|--dst) install_dir="$2"; shift;;
-        *) echo "Unknown parameter: $1"; exit 1;;
+        -s|--src)
+            if [ -n "$2" ] && [ ${2:0:1} != "-" ]; then
+                src_dir="$2"
+                shift 2
+            else
+                echo "Error: Argument for $1 is missing" >&2
+                usage
+            fi
+            ;;
+        -d|--dst)
+            if [ -n "$2" ] && [ ${2:0:1} != "-" ]; then
+                install_bin_dir="$2"
+                shift 2
+            else
+                echo "Error: Argument for $1 is missing" >&2
+                usage
+            fi
+            ;;
+        -c|--conf)
+            if [ -n "$2" ] && [ ${2:0:1} != "-" ]; then
+                logs2eca_conf_dir="$2"
+                shift 2
+            else
+                echo "Error: Argument for $1 is missing" >&2
+                usage
+            fi
+            ;;
+        -*|--*=) # unsupported flags
+            echo "Error: Unsupported flag $1" >&2
+            usage
+            ;;
+        *) # preserve positional arguments
+            PARAMS="$PARAMS $1"
+            shift
+            ;;
     esac
-    shift
 done
+
 
 # Check if python3-inotify is installed, if not, install it
 if ! rpm -q python3-inotify > /dev/null 2>&1; then
@@ -26,11 +84,15 @@ if ! rpm -q python3-inotify > /dev/null 2>&1; then
     yum install -y $RPM_DEPS
 fi
 
-# Install the logs2eca script
-install -m 755 -o root -g root "${src_dir}/logs2eca" "${install_dir}"/bin/logs2eca
+# Install the logs2eca.py script to the install directory and make it
+# executable
+install -m 755 -o root -g root \
+    "${src_dir}/logs2eca.py" \
+    "${install_bin_dir}/logs2eca
 
 # Install the systemd service, replacing the ExecStart path with the install location
-sed "s|/usr/bin/logs2eca|${install_dir}/bin/logs2eca|g" "${src_dir}/logs2eca@.service" > "${SYSTEMD_DIR}/logs2eca@.service"
+sed "s|/usr/bin/logs2eca|${install_bin_dir/bin}/logs2eca|g" \
+    "${src_dir}/logs2eca@.service" > "${SYSTEMD_DIR}/logs2eca@.service"
 
 # Create the environment file directory if it doesn't exist
 if [ ! -d "$logs2eca_conf_dir" ]; then
@@ -39,7 +101,9 @@ if [ ! -d "$logs2eca_conf_dir" ]; then
 fi
 
 # Install the environment file template
-install -m 644 -o root -g root "${src_dir}/logs2eca_env_template" "${logs2eca_conf_dir}/logs2eca_env_template"
+install -m 644 -o root -g root \
+    "${src_dir}/logs2eca_env_template" \
+    "${logs2eca_conf_dir}/logs2eca_env_template"
 
 # Reload systemd daemon to reflect changes
 systemctl daemon-reload

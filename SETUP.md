@@ -16,13 +16,15 @@ yum install -y python3-inotify
 
 ### 2. Deploy the Script
 
-Deploy the `logs2eca` script to a suitable directory, such as `/usr/local/bin`. Here's an example using the `install` command:
+Deploy the `logs2eca` script to a suitable directory, such as `/usr/local/bin`. See the following example below. In this example, the `install` command is used to deploy the file `logs2eca.py` to `/usr/local/bin/logs2eca`.
+
+**NOTE: Remember to adjust paths below to match your environment.**
 
 ```bash
-install -m 755 -o root -g root /path/to/logs2eca /usr/local/bin/logs2eca
+install -m 755 -o root -g root /path/to/source_directory/logs2eca.py /usr/local/bin/logs2eca
 ```
 
-Make sure to replace `/path/to/logs2eca` with the actual path to the `logs2eca` script.
+Make sure to replace `/path/to/source_directory` with the actual path to the directory with the sources files, i.e.contents of this git repository.
 
 ### 3. Systemd Service Template Setup
 
@@ -79,22 +81,63 @@ systemctl enable --now logs2eca@my_instance.service
 
 Replace `my_instance` with the desired service instance name.
 
-## Automatic Installation using `install.sh`
+## Automatic Installation
 
 If you'd like to streamline the installation process, you can utilize the `install.sh` script included in the package. It automatically performs the tasks outlined in the manual installation guide.
+
+Note that the `install.sh` script does not create or configure the environment file for service instances. You'll still need to manually configure the environment files as outlined in the section 4 of the manual installation guide.
+
+When the script is ready, it will display a summary message providing instructions for creating an instance of the logs2eca service, along with the paths to the systemd service template and the environment file template.
+
+### Deployment and usage of `install.sh`
+
+To deploy the script:
 
 1. Provide executable permissions to the script:
 
    ```bash
-   chmod +x /path/to/install.sh
+   chmod +x /path/to/source_directory/install.sh
    ```
 
 2. Run the script:
 
    ```bash
-   /path/to/install.sh
+   /path/to/source_directory/install.sh  # see below for optional parameters
    ```
 
-Remember to replace `/path/to/install.sh` with the actual path to the script.
+Remember to replace `/path/to/source_directory/install.sh` with the actual path to the script.
 
-Note that the `install.sh` script does not create or configure the environment file for service instances. You'll still need to manually configure the environment files as outlined in the section 4 of the manual installation guide.
+You may customize the installation process through optional command-line parameters and environment variables. Here are the details:
+
+| Optional CLI Parameter | Description |
+| ------------------ | ----------- |
+| `-s, --src` | Specifies the source directory. |
+| `-d, --dst` | Specifies the installation directory for the script. |
+| `-c, --conf` | Specifies the directory for the configuration files. |
+
+| Environment Variable | Descriptions |
+| -------------------- | ----------- |
+| `LOGS2ECA_SRC_DIR` | Sets the source directory. |
+| `LOGS2ECA_INSTALL_BIN_DIR` | Sets the installation directory for the script. |
+| `LOGS2ECA_CONF_DIR` | Sets the directory for the configuration files. |
+
+|  Default values  ||
+|-------------------------|-------------------------------------------|
+| Source directory        | The directory of the installation script. |
+| Installation directory  | `/usr/local/bin`                          |
+| Configuration directory | `/etc/logs2eca`                           |
+
+For instance, to specify a different installation directory, you could run:
+
+```bash
+/path/to/install.sh -d /my/installation/directory
+```
+
+Or, alternatively, you could set an environment variable:
+
+```bash
+export LOGS2ECA_INSTALL_BIN_DIR=/my/installation/directory
+/path/to/install.sh
+```
+
+The installation script also checks for the necessary dependency `python3-inotify`, and will attempt to install it if it's not already present on your system.
