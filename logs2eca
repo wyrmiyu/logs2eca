@@ -140,23 +140,19 @@ def parse_args():
         }
 
         for arg, params in arg_dict.items():
+            env = params.get("env")
             arg_default = params.get("default")
-            if(params.get("env") and os.environ.get(params.get("env"))):
-                arg_default = os.environ.get(params.get("env"))
-                print(f"{arg}: arg_default = {arg_default}")
-
-            print(f"{arg}: arg_default = {arg_default}")
+            if(env and os.environ.get(env)):
+                arg_default = os.environ.get(env)
 
             arg_help = params.get("help")
-            if(params.get("env")):
+            if(env):
                 if(params.get("required")):
                     arg_help = (f'{arg_help} Can only be omitted if provided '
-                                f'with the environment variable: '
-                                f'{params.get("env")}')
+                                f'with the environment variable: {env}')
                 else:
                     arg_help = (f'{arg_help} Can optionally be provided with '
-                                f'the environment variable: '
-                                f'{params.get("env")}')
+                                f'the environment variable: {env}')
 
             arg_group = optional
             if(params.get("required")):
@@ -189,7 +185,7 @@ def parse_args():
             default=argparse.SUPPRESS)
 
         args = arg_parser.parse_args()
-        print(dict(args._get_kwargs()))
+
         # Verify all required arguments are provided
         missing_args = []
         for arg, params in arg_dict.items():
@@ -300,21 +296,10 @@ class EventHandler(pyinotify.ProcessEvent):
     def match_words(self, line):
         # Add space at start and end of line to allow matching pattern
         # at the start and end of the line
-        print(f"""
-            match_words() before f-strings:
-            line: "{line}"
-            self.pattern: "{self.pattern}"
-            """)
         line = f" {line} "
         # Add space at start and end of pattern to ensure only whole words
         # are matched
         pattern = f" {self.pattern} "
-        print(f"""
-            match_words() after f-strings:
-            line: "{line}"
-            pattern: "{pattern}"
-            pattern in line: {pattern in line}
-            """)
         return pattern in line
 
     def process_IN_MODIFY(self, event):
