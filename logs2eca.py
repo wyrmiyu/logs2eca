@@ -1,16 +1,25 @@
 #!/usr/bin/env python3
+"""
+This script monitors a log file for events and runs a command when an event
+is detected. It uses pyinotify to monitor the log file, and the subprocess
+module to run the command.
+"""
+
 from pathlib import Path
 from typing import Pattern
+
 import argparse
 import logging
 import os
-import pyinotify
 import re
 import signal
 import subprocess
 import sys
 import time
 import uuid
+
+import pyinotify
+
 
 logging.basicConfig(level=logging.ERROR)
 
@@ -19,20 +28,26 @@ RE_INDICATORS = ('/', '|', '%')
 DEFAULT_LOGS2ECA_WAIT = 3
 DEFAULT_ARBITRARY_MATCH = False
 
+
 class ArgumentParsingError(Exception):
     pass
+
 
 class MainExecutionError(Exception):
     pass
 
+
 class MissingRequiredArgumentError(Exception):
     pass
+
 
 class PatternMatchError(Exception):
     pass
 
+
 class SIGHUPHandlingError(Exception):
     pass
+
 
 def parse_args():
     """
@@ -52,7 +67,12 @@ def parse_args():
             },
         ...
     }
-    returns: Namespace[logfile, pattern, command, wait, arbitrary_substring_match]
+    returns: Namespace[
+        logfile,
+        pattern,command,
+        wait,
+        arbitrary_substring_match
+    ]
     """
 
     try:
@@ -71,7 +91,7 @@ def parse_args():
             "will match all of the following strings: 'foobar', 'foofoobar', "
             "'bazbarfoobar', etc. "
             "Regular expressions must be enclosed in any of the following "
-            f"characters: {re_chars}. However, you do not need to escape those "
+            f"characters: {re_chars}. However, you don't need to escape those "
             "characters, even if you use them in the actual regex pattern.")
         arg_parser = argparse.ArgumentParser(
             description=desc,
@@ -133,8 +153,8 @@ def parse_args():
                 "default": DEFAULT_ARBITRARY_MATCH,
                 "help": (
                     "If the pattern is a string, this flag will make logs2eca "
-                    "match the pattern as *any* substring of a line instead of "
-                    "a word in a line."
+                    "match the pattern as *any* substring of a line instead "
+                    "of a word in a line."
                 ),
             },
         }
@@ -142,12 +162,12 @@ def parse_args():
         for arg, params in arg_dict.items():
             env = params.get("env")
             arg_default = params.get("default")
-            if(env and os.environ.get(env)):
+            if (env and os.environ.get(env)):
                 arg_default = os.environ.get(env)
 
             arg_help = params.get("help")
-            if(env):
-                if(params.get("required")):
+            if (env):
+                if (params.get("required")):
                     arg_help = (f'{arg_help} Can only be omitted if provided '
                                 f'with the environment variable: {env}')
                 else:
@@ -155,13 +175,13 @@ def parse_args():
                                 f'the environment variable: {env}')
 
             arg_group = optional
-            if(params.get("required")):
+            if (params.get("required")):
                 arg_group = required
             # Since both commandline arguments and environment variables are
-            # used to set the arguments, and argparse only considers commandline
-            # arguments when checking for required arguments, we set
-            # required=False and check for missing arguments manually.
-            if(params.get("type") == bool):
+            # used to set the arguments, and argparse only considers
+            # command-line arguments when checking for required arguments,
+            # we set required=False and check for missing arguments manually.
+            if (params.get("type") == bool):
                 arg_group.add_argument(
                     *params.get("opts"),
                     required=False,
@@ -189,7 +209,7 @@ def parse_args():
         # Verify all required arguments are provided
         missing_args = []
         for arg, params in arg_dict.items():
-            if(params.get("required") and getattr(args, arg) is None):
+            if (params.get("required") and getattr(args, arg) is None):
                 missing_args.append(arg)
         if missing_args:
             raise MissingRequiredArgumentError(
@@ -200,9 +220,12 @@ def parse_args():
         raise ArgumentParsingError(f'Error parsing arguments: {str(e)}')
 
     except Exception as e:
-        raise ArgumentParsingError(f'Unexpected error during argument parsing: {str(e)}')
+        raise ArgumentParsingError(
+            f'Unexpected error during argument parsing: {str(e)}'
+        )
 
     return args
+
 
 class EventHandler(pyinotify.ProcessEvent):
     """
@@ -215,7 +238,12 @@ class EventHandler(pyinotify.ProcessEvent):
         process_IN_MOVED_FROM - triggered when the log file is moved
     """
 
-    def my_init(self, logfile, pattern, command, wait, arbitrary_substring_match):
+    def my_init(self,
+                logfile,
+                pattern,
+                command,
+                wait,
+                arbitrary_substring_match):
         """
         This method is called by __init__ and is meant for user-defined
         initialization. It performs the following:
@@ -254,7 +282,7 @@ class EventHandler(pyinotify.ProcessEvent):
         # a 8 letter hexadecimal string generated by uuid.uuid4()
         self.id = f"<{uuid.uuid4().hex[:8]}>"
 
-        if(self.logfile.exists()):
+        if (self.logfile.exists()):
             try:
                 print(f"{self.id} Logfile '{self.logfile}' exists")
                 self.current_position = self.logfile.stat().st_size
@@ -269,16 +297,16 @@ class EventHandler(pyinotify.ProcessEvent):
                     f"File '{self.logfile}' does not exist"
                 )
         else:
-            w = (f"[warn] Logfile '{self.logfile}' does not exist, "
-                "will wait for it to be created.")
-            print(w)
+            warn = (f"[warn] Logfile '{self.logfile}' does not exist, "
+                    "will wait for it to be created.")
+            print(warn)
             self.file = None
             self.current_position = 0
 
         try:
             # Check if the pattern is a string or a regex pattern
-            if(isinstance(self.pattern, str)):
-                if(self.arbitrary_substring_match):
+            if (isinstance(self.pattern, str)):
+                if (self.arbitrary_substring_match):
                     # If arbitrary string match is allowed, simply check if
                     # pattern is a substring of the line
                     self.pattern_match = lambda line: self.pattern in line
@@ -287,8 +315,8 @@ class EventHandler(pyinotify.ProcessEvent):
                     # that ensures word match only
                     self.pattern_match = self.match_words
             else:
-                    # Assuming Pattern is a regex pattern
-                    self.pattern_match = lambda line: self.pattern.search(line)
+                # Assuming Pattern is a regex pattern
+                self.pattern_match = lambda line: self.pattern.search(line)
 
         except (TypeError, AttributeError):
             raise PatternMatchError(f"Invalid pattern '{self.pattern}'")
@@ -309,21 +337,23 @@ class EventHandler(pyinotify.ProcessEvent):
         will call the run_command method.
         """
 
-        if(Path(event.pathname) == self.logfile):
-            if(self.file):
+        if (Path(event.pathname) == self.logfile):
+            if (self.file):
                 self.file.seek(self.current_position)
                 for line in self.file:
                     line = line.strip()
-                    if(self.id in line):
+                    if (self.id in line):
                         continue
-                    if(self.pattern_match(line)):
+                    if (self.pattern_match(line)):
                         print(f"{self.id} Event: {line.strip()}")
                         if isinstance(self.pattern, Pattern):
                             info = (f"{self.id} Matching the regex pattern: "
                                     f"{self.pattern.pattern}")
                             print(info)
                         else:
-                            print(f"{self.id} Matching the pattern: {self.pattern}")
+                            info = (f"{self.id} Matching the pattern: "
+                                    "{self.pattern}")
+                            print(info)
                         self.run_command()
                 self.current_position = self.file.tell()
 
@@ -333,7 +363,7 @@ class EventHandler(pyinotify.ProcessEvent):
         one, and reset the current position to 0.
         """
 
-        if(Path(event.pathname) == self.logfile):
+        if (Path(event.pathname) == self.logfile):
             print(f"{self.id} Logfile '{self.logfile}' created")
             self.file = open(self.logfile, 'a+')
             self.current_position = 0
@@ -345,10 +375,11 @@ class EventHandler(pyinotify.ProcessEvent):
         None, and reset the current position to 0.
         """
 
-        if(Path(event.pathname) == self.logfile):
-            print( f"{self.id} Logfile '{self.logfile}' deleted, "
+        if (Path(event.pathname) == self.logfile):
+            info = (f"{self.id} Logfile '{self.logfile}' deleted, "
                     "closing and waiting for it to be re-created.")
-            if(self.file):
+            print(info)
+            if (self.file):
                 self.file.close()
             self.file = None
 
@@ -359,10 +390,11 @@ class EventHandler(pyinotify.ProcessEvent):
         It will then sleep for the number of seconds specified by the user.
         """
 
-        if(Path(event.pathname) == self.logfile):
-            print( f"{self.id} Logfile '{self.logfile}' moved, "
+        if (Path(event.pathname) == self.logfile):
+            info = (f"{self.id} Logfile '{self.logfile}' moved, "
                     "closing and waiting for it to be re-created.")
-            if(self.file):
+            print(info)
+            if (self.file):
                 self.file.close()
             self.file = None
 
@@ -375,28 +407,35 @@ class EventHandler(pyinotify.ProcessEvent):
 
         try:
             print(f"{self.id} Running command: '{self.command}'")
-            result = subprocess.run(self.command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            result = subprocess.run(self.command,
+                                    shell=True,
+                                    stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE)
             # Print the output of the command
             if result.stdout:
                 print(f"Command stdout: {result.stdout.decode('utf-8')}")
             if result.stderr:
-                print(f"Command stderr: {result.stderr.decode('utf-8')}", file=sys.stderr)
+                result_error = ("Command stderr: "
+                                f"{result.stderr.decode('utf-8')}")
+                print(result_error, file=sys.stderr)
 
         except FileNotFoundError:
             raise MainExecutionError(f"Command '{self.command}' not found")
         except subprocess.CalledProcessError as e:
-            raise MainExecutionError(f"Command '{self.command}' failed with error: {str(e)}")
+            subprocess_error = (f"Command '{self.command}' "
+                                f"failed with error:  {str(e)}")
+            raise MainExecutionError(subprocess_error)
 
         time.sleep(self.wait)
-
 
     def __del__(self):
         """
         Handles SIGHUP signals. This method will close the current file handle
         (if any), open a new one, and reset the current position to 0.
         """
-        if(self.file):
+        if (self.file):
             self.file.close()
+
 
 class LogFileMonitor:
     """
@@ -433,7 +472,7 @@ class LogFileMonitor:
             signal.signal(signal.SIGHUP, self.handle_sighup)
             pattern = args.pattern.strip()
             for indicator in RE_INDICATORS:
-                if(
+                if (
                     pattern.startswith(indicator) and
                     pattern.endswith(indicator)
                 ):
@@ -459,7 +498,8 @@ class LogFileMonitor:
             raise MainExecutionError(
                 f'Unexpected error during the main execution: {str(e)}')
 
-if(__name__ == "__main__"):
+
+if (__name__ == "__main__"):
     try:
         monitor = LogFileMonitor()
         monitor.run()
