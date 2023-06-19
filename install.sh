@@ -88,10 +88,10 @@ fi
 # executable
 install -m 755 -o root -g root \
     "${src_dir}/logs2eca.py" \
-    "${install_bin_dir}/logs2eca
+    "${install_bin_dir}/logs2eca"
 
 # Install the systemd service, replacing the ExecStart path with the install location
-sed "s|/usr/bin/logs2eca|${install_bin_dir/bin}/logs2eca|g" \
+sed "s|/usr/bin/logs2eca|${install_bin_dir}/logs2eca|g" \
     "${src_dir}/logs2eca@.service" > "${SYSTEMD_DIR}/logs2eca@.service"
 
 # Create the environment file directory if it doesn't exist
