@@ -35,7 +35,8 @@ LOGS2ECA_EVENT_PATTERN=
 LOGS2ECA_COMMAND=
 
 # Optional: LOGS2ECA_WAIT
-# The number of seconds to wait before resuming monitoring the log file after an event has been detected.
+# The number of seconds to wait before resuming monitoring the log file after
+# an event has been detected.
 # Default: 3
 #
 #LOGS2ECA_WAIT=3
